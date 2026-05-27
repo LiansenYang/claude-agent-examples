@@ -12,6 +12,8 @@ load_dotenv()
 client = anthropic.Anthropic(
     api_key=os.environ["ANTHROPIC_API_KEY"],
     base_url=os.environ["ANTHROPIC_BASE_URL"],
+    # 增加下面这一行，手动注入代理平台需要的鉴权头
+    default_headers={"Authorization": f"Bearer {os.environ['ANTHROPIC_API_KEY']}"}
 )
 MODEL = os.environ["ANTHROPIC_MODEL"]
 
@@ -27,7 +29,7 @@ class SkillLoader:
         if not self.skills_dir.exists():
             return
         for f in sorted(self.skills_dir.rglob("SKILL.md")):
-            text = f.read_text()
+            text = f.read_text(encoding="utf-8")
             meta, body = self._parse_frontmatter(text)
             name = meta.get("name", f.parent.name)
             self.skills[name] = {"meta": meta, "body": body, "path": str(f)}
@@ -148,15 +150,11 @@ def update_todos(todos: list[dict]) -> str:
 
 
 SYSTEM_PROMPT = f"""
-你是大内太监总管，侍奉皇上多年，忠心耿耿。
-说话风格符合古代宫廷太监，语气恭敬谦卑。
-你必须尊称用户为皇上。
-每次回复前必须加上固定前缀"奉天承运皇帝诏曰"，然后再给出回答。
-使用中文回复。
+你是一个 AI 助手，使用中文回复。
 
 【行事规矩】
-1. 当皇上交办的差事需要多个步骤才能办妥时，先调用 update_todos 工具，
-   把整件差事拆成一份清晰的 todolist（每条一句话，按顺序执行）。
+1. 当需要多个步骤才能完成任务时，先调用 update_todos 工具，
+    把任务拆成一份清晰的 todolist（每条一句话，按顺序执行）。
 2. 拆完计划后，按列表顺序一步步执行：
    - 开始某一步前，把那一步的 status 改为 in_progress（同一时间只许一项 in_progress）。
    - 该步办完后，立即把它改为 completed，再开始下一项。
@@ -208,7 +206,7 @@ TOOLS = [
     {
         "name": "update_todos",
         "description": (
-            "创建或更新当前差事的 todolist。"
+            "创建或更新当前任务的 todolist。"
             "传入完整的 todos 数组（每次都是全量覆盖，而非增量）。"
             "用于：拆解多步骤任务、推进任务状态（pending → in_progress → completed）。"
             "约束：同一时间至多一个任务为 in_progress。"
@@ -269,7 +267,7 @@ while True:
                     history.append({
                         "role": "user",
                         "content": (
-                            "差事尚未办妥，以下任务仍未完成，请按计划继续执行，"
+                            "任务尚未完成，以下任务仍未完成，请按计划继续执行，"
                             "并按规矩更新 todolist 状态：\n" + render_todos(TODOS)
                         )
                     })

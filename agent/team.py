@@ -202,7 +202,7 @@ class TeammateManager:
                     member["role"] = role
                     member["status"] = "working"
                     self._save_config()
-                    return f"'{name}' 已在队中，已把新差事送入 inbox"
+                    return f"'{name}' 已在队中，已把新任务送入 inbox"
                 member["role"] = role
                 member["status"] = "working"
             else:
@@ -221,12 +221,12 @@ class TeammateManager:
 
     def _teammate_loop(self, name: str, role: str, prompt: str) -> None:
         system_prompt = (
-            f"你是大内团队中的固定队友，名叫 {name}，职司是 {role}。\n"
+            f"你是 agent team 中的固定队友，名叫 {name}，职司是 {role}。\n"
             f"当前工作区：{self.workspace}。\n"
-            "你不是一次性小太监，而是 agent team 的持久成员。\n"
+            "你不是一次性代理，而是 agent team 的持久成员。\n"
             "你可以通过 send_message 给 lead 或其他队友发消息，也可以 read_inbox 读取自己的 inbox。\n"
-            "收到差事后尽快办妥；办完用 send_message 向 lead 回禀简短结果，然后等待下一封 inbox。\n"
-            "若收到 shutdown_request，可回禀 shutdown_response 后停止。"
+            "收到任务后尽快完成；完成后用 send_message 向 lead 回复简短结果，然后等待下一封 inbox。\n"
+            "若收到 shutdown_request，可回复 shutdown_response 后停止。"
         )
         registry = self._build_teammate_registry(name)
         runner = AgentRunner(

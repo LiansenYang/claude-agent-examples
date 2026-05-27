@@ -366,7 +366,7 @@ If validation fails, the script will report the errors and exit without creating
 
 After testing the skill, users may request improvements. Often this happens right after using the skill, with fresh context of how the skill performed.
 
-**Iteration workflow:**
+**Iteration workflow    :**
 
 1. Use the skill on real tasks
 2. Notice struggles or inefficiencies

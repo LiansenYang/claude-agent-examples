@@ -11,7 +11,7 @@ class SpawnTeammateTool(Tool):
     name = "spawn_teammate"
     description = (
         "召入一个持久队友，加入 agent team。队友有名字、职司、独立线程和 inbox；"
-        "适合长期项目、固定角色协作，或需要多人互相沟通的差事。"
+        "适合长期项目、固定角色协作，或需要多人互相沟通的任务。"
         "如果队友状态是 offline，也用这个工具重新启动其线程。"
     )
 
@@ -23,7 +23,7 @@ class SpawnTeammateTool(Tool):
         return tool_parameters_schema(
             name=StringSchema("队友名字，例如 alice、coder、reviewer"),
             role=StringSchema("队友职司，例如 coder、reviewer、researcher"),
-            prompt=StringSchema("交给该队友的第一件差事"),
+            prompt=StringSchema("交给该队友的第一个任务"),
         )
 
     def execute(self, name: str, role: str, prompt: str) -> str:

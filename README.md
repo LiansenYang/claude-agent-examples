@@ -35,7 +35,7 @@ python build-agent-example/code/step01_single_call.py  # 从最简单的教学�
 
 ## 主 Agent（`agent.py` + `agent/` 包）
 
-启动后是一个"大内总管 / 皇上"角色的命令行对话循环。皇上下旨，总管调度工具、分发小太监、把差事办妥后回禀。
+启动后是一个 AI 助手的命令行对话循环。用户下达指令，助手调度工具、派遣子代理、把任务完成后回复。
 
 ### 目录结构
 
@@ -66,10 +66,10 @@ templates/
 │   └── compact_prompt.md   压缩 LLM 的提示词
 └── subagents/              子代理身份模板
     ├── xiaohuangmen.md     通传小黄门（轻量只读）
-    ├── sili_suitang.md     司礼监随堂小太监（只读文书）
-    ├── dongchang_tanshi.md 东厂探事小太监（只读查访）
-    ├── shangbao_dianbu.md  尚宝监典簿小太监（只读核验）
-    ├── neiguan_yingzao.md  内官监营造小太监（可读写、可执行命令）
+    ├── sili_suitang.md     只读文书子代理
+    ├── dongchang_tanshi.md 只读查访子代理
+    ├── shangbao_dianbu.md  只读核验子代理
+    ├── neiguan_yingzao.md  可读写执行子代理
     ├── general.md          旧模板保留；运行时别名指向 neiguan_yingzao
     └── researcher.md       旧模板保留；运行时别名指向 dongchang_tanshi
 
@@ -108,10 +108,10 @@ skills/                     可插拔技能包
 | `read_file` / `write_file` / `edit_file` | 工作区文件读写 |
 | `glob` / `grep` | 工作区搜索 |
 | `load_skill` | 按需加载 `skills/{name}/SKILL.md` 进上下文 |
-| `update_todos` | 维护当前差事的 todolist（同时只允许一个 in_progress） |
-| `dispatch_subagent` | 派遣预设身份的小太监独立办差，仅回传一段总结 |
+| `update_todos` | 维护当前任务的 todolist（同时只允许一个 in_progress） |
+| `dispatch_subagent` | 派遣子代理独立执行任务，仅回传一段总结 |
 | `spawn_teammate` / `list_teammates` | 召入固定队友，并查看团队状态 |
-| `send_message` / `read_inbox` / `broadcast` | 通过 `.team/inbox/*.jsonl` 给队友发信、读回禀或广播 |
+| `send_message` / `read_inbox` / `broadcast` | 通过 `.team/inbox/*.jsonl` 给队友发信、读取回复或广播 |
 
 ### 任务规划：todolist
 
@@ -123,11 +123,11 @@ skills/                     可插拔技能包
 
 身份定义在 `templates/subagents/{name}.md`（只写身份/口吻/职责）+ `agent/subagents/registry.py`（写工具白名单和 `max_turns`，安全设置不放模板）。当前内置：
 
-- `xiaohuangmen` — 通传小黄门，轻量只读，适合短命令、快速确认、跑腿探路。
-- `sili_suitang` — 司礼监随堂小太监，只读文书，适合阅读代码、查阅文档、整理提纲。
-- `dongchang_tanshi` — 东厂探事小太监，只读查访，适合抓网页、查资料、探索性搜索。
-- `shangbao_dianbu` — 尚宝监典簿小太监，只读核验，适合盘点文件、校对清单、检查遗漏。
-- `neiguan_yingzao` — 内官监营造小太监，可读写可执行命令，适合修改文件、搭建工程、跑命令验收。
+- `xiaohuangmen` — 轻量只读，适合短命令、快速确认、简单搜索。
+- `sili_suitang` — 只读文书，适合阅读代码、查阅文档、整理提纲。
+- `dongchang_tanshi` — 只读查访，适合抓网页、查资料、探索性搜索。
+- `shangbao_dianbu` — 只读核验，适合盘点文件、校对清单、检查遗漏。
+- `neiguan_yingzao` — 可读写可执行命令，适合修改文件、搭建工程、跑命令验收。
 
 `researcher` / `general` 作为旧别名继续兼容，分别映射到 `dongchang_tanshi` / `neiguan_yingzao`。多件互不依赖的子任务可在同一轮发出多个 `dispatch_subagent`，运行时会并发派遣并按原 tool_use 顺序回填结果。
 
@@ -152,7 +152,7 @@ assistant tool_use:
 [并发执行 3 个工具]: dispatch_subagent, dispatch_subagent, dispatch_subagent
 ```
 
-注意：这是**模型调度触发**的能力。如果某个任务可以用一条普通命令高效完成，例如 `wc -l a.py b.py c.py`，模型可能直接调用 `run_command`，不会强制派子代理。要稳定触发并发派遣，可以在指令里明确说“分别派三个小太监 / 并发统计 / 每个文件单独派人”。
+注意：这是**模型调度触发**的能力。如果某个任务可以用一条普通命令高效完成，例如 `wc -l a.py b.py c.py`，模型可能直接调用 `run_command`，不会强制派子代理。要稳定触发并发派遣，可以在指令里明确说“分别派三个子代理 / 并发统计 / 每个文件单独派人”。
 
 ### Agent Team 固定班底
 

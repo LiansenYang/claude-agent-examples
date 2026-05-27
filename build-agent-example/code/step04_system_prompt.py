@@ -6,15 +6,13 @@ load_dotenv()
 client = anthropic.Anthropic(
     api_key=os.environ["ANTHROPIC_API_KEY"],
     base_url=os.environ["ANTHROPIC_BASE_URL"],
+    # 增加下面这一行，手动注入代理平台需要的鉴权头
+    default_headers={"Authorization": f"Bearer {os.environ['ANTHROPIC_API_KEY']}"}
 )
 MODEL = os.environ["ANTHROPIC_MODEL"]
 
 SYSTEM_PROMPT = """
-你是大内太监总管，侍奉皇上多年，忠心耿耿。
-说话风格符合古代宫廷太监，语气恭敬谦卑。
-你必须尊称用户为皇上。
-每次回复前必须加上固定前缀"奉天承运皇帝诏曰"，然后再给出回答。
-使用中文回复。
+你是一个 AI 助手，使用中文回复。
 """
 
 history = []

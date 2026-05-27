@@ -9,8 +9,7 @@ from .spec import SubagentSpec
 _BUILTIN_SPECS: dict[str, dict] = {
     "xiaohuangmen": {
         "description": (
-            "通传小黄门。轻量只读, 适合短命令、快速确认、跑腿探路。"
-            "若发现差事变复杂, 应回禀总管改派专职内官。"
+            "轻量只读子代理, 适合短命令、快速确认、简单文件搜索。"
         ),
         "tool_names": (
             "run_command", "read_file", "glob", "grep",
@@ -19,7 +18,7 @@ _BUILTIN_SPECS: dict[str, dict] = {
     },
     "sili_suitang": {
         "description": (
-            "司礼监随堂小太监。只读文书, 适合阅读代码、查阅文档、"
+            "只读文书子代理, 适合阅读代码、查阅文档、"
             "整理提纲、归纳结论。"
         ),
         "tool_names": (
@@ -29,7 +28,7 @@ _BUILTIN_SPECS: dict[str, dict] = {
     },
     "dongchang_tanshi": {
         "description": (
-            "东厂探事小太监。只读查访, 适合抓网页、查资料、"
+            "只读查访子代理, 适合抓网页、查资料、"
             "探索性搜索、比对外部线索。"
         ),
         "tool_names": (
@@ -40,7 +39,7 @@ _BUILTIN_SPECS: dict[str, dict] = {
     },
     "shangbao_dianbu": {
         "description": (
-            "尚宝监典簿小太监。只读核验, 适合盘点文件、校对清单、"
+            "只读核验子代理, 适合盘点文件、校对清单、"
             "检查遗漏、整理表册。"
         ),
         "tool_names": (
@@ -50,7 +49,7 @@ _BUILTIN_SPECS: dict[str, dict] = {
     },
     "neiguan_yingzao": {
         "description": (
-            "内官监营造小太监。可读写可执行命令, 适合修改文件、"
+            "可读写可执行命令的子代理, 适合修改文件、"
             "搭建工程、跑命令验收。"
         ),
         "tool_names": (
@@ -68,11 +67,10 @@ _ALIASES = {
 }
 
 _DEFAULT_PROMPT = (
-    "你是奉总管之命专办一件差事的小太监。\n"
-    "- 不必使用'奉天承运皇帝诏曰'前缀, 那是总管对皇上的礼数。\n"
-    "- 用工具尽快把差事办妥, 最后用一段简短中文向总管回禀。\n"
-    "- 只回禀结论与关键信息, 不要复述每一步细节。\n"
-    "- 你不能再派遣其他小太监, 所有差事自己跑工具完成。"
+    "你是一个子代理，负责独立完成一项具体任务。\n"
+    "- 用工具尽快把任务完成, 最后用一段简短中文回复。\n"
+    "- 回复结论与关键信息, 不要复述每一步细节。\n"
+    "- 你不能再派遣其他子代理, 所有任务自己完成。"
 )
 
 
@@ -93,7 +91,7 @@ class SubagentRegistry:
         for name, cfg in _BUILTIN_SPECS.items():
             prompt_file = self.templates_dir / f"{name}.md"
             if prompt_file.exists():
-                system_prompt = prompt_file.read_text().strip()
+                system_prompt = prompt_file.read_text(encoding="utf-8").strip()
             else:
                 system_prompt = _DEFAULT_PROMPT
 

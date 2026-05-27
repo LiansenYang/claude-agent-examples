@@ -29,14 +29,17 @@ from .tools.team import (
 
 class AgentLoop:
     def __init__(self, root: Path | None = None,
-                 model: str = "qwen3.6-35b-a3b-ud-mlx"):
+                 model: str | None = None):
         load_dotenv()
+        model = model or os.environ.get("ANTHROPIC_MODEL", "qwen3.6-35b-a3b-ud-mlx")
         self.root = root or Path(__file__).parent.parent
 
         client = anthropic.Anthropic(
             api_key=os.environ["ANTHROPIC_API_KEY"],
-            base_url=os.environ.get("ANTHROPIC_BASE_URL"),
-        )
+    base_url=os.environ.get("ANTHROPIC_BASE_URL"),
+    # 增加下面这一行，手动注入代理平台需要的鉴权头
+    default_headers={"Authorization": f"Bearer {os.environ['ANTHROPIC_API_KEY']}"}
+)
 
         self.memory = MemoryStore(
             memory_dir=self.root / "memory",
@@ -150,4 +153,4 @@ class AgentLoop:
             self.history.append({"role": "user", "content": user_input})
             self.memory.append_history("user", user_input)
             reply = self.runner.step(self.history)
-            print(f"大内总管🧟\u200d♂️: {reply}\n")
+            print(f"Agent: {reply}\n")

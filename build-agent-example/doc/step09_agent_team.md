@@ -207,7 +207,7 @@ Team: default
 ## 试一试
 
 ```text
-皇上要组一个小队：alice 做 coder，bob 做 reviewer。先让 alice 写一个 hello.py，再让 bob 等 alice 回禀后检查。
+组一个小队：alice 做 coder，bob 做 reviewer。先让 alice 写一个 hello.py，再让 bob 等 alice 回禀后检查。
 ```
 
 再试：

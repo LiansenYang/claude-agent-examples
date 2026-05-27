@@ -69,7 +69,7 @@ class TodoStore:
 class UpdateTodosTool(Tool):
     name = "update_todos"
     description = (
-        "创建或更新当前差事的 todolist。"
+        "创建或更新当前任务的 todolist。"
         "传入完整的 todos 数组（每次都是全量覆盖，而非增量）。"
         "用于：拆解多步骤任务、推进任务状态（pending → in_progress → completed）。"
         "约束：同一时间至多一个任务为 in_progress。"

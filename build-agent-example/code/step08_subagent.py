@@ -13,6 +13,8 @@ load_dotenv()
 client = anthropic.Anthropic(
     api_key=os.environ["ANTHROPIC_API_KEY"],
     base_url=os.environ["ANTHROPIC_BASE_URL"],
+    # 增加下面这一行，手动注入代理平台需要的鉴权头
+    default_headers={"Authorization": f"Bearer {os.environ['ANTHROPIC_API_KEY']}"}
 )
 
 SKILLS_DIR = Path(__file__).parent / "skills"
@@ -28,7 +30,7 @@ class SkillLoader:
         if not self.skills_dir.exists():
             return
         for f in sorted(self.skills_dir.rglob("SKILL.md")):
-            text = f.read_text()
+            text = f.read_text(encoding="utf-8")
             meta, body = self._parse_frontmatter(text)
             name = meta.get("name", f.parent.name)
             self.skills[name] = {"meta": meta, "body": body, "path": str(f)}
@@ -288,71 +290,69 @@ _TOOL_SCHEMAS: dict[str, dict] = {
 
 # ============== 子代理预设身份 ==============
 # 身份在 system_prompt 中定义，工具白名单在代码中控制（不放进 prompt）。
-# 这里故意使用宫廷内官职位做角色名：既贴合教程人设，也让不同子代理的职责边界更好记。
 def build_subagent_prompt(title: str, duty: str, boundary: str) -> str:
     return (
-        f"你是{title}，奉总管之命专办一件差事。\n"
-        f"- 职司：{duty}\n"
+        f"你是{title}，负责执行一项独立任务。\n"
+        f"- 职责：{duty}\n"
         f"- 边界：{boundary}\n"
-        "- 不必使用\"奉天承运皇帝诏曰\"前缀，那是总管对皇上的礼数。\n"
-        "- 用工具尽快把差事办妥，最后用一段简短中文向总管回禀结果。\n"
-        "- 只回禀结论与关键信息，不要复述每一步细节。\n"
-        "- 你不能再派遣其他小太监，所有差事自己跑工具完成。"
+        "- 用工具尽快完成任务，最后用一段简短中文回复结果。\n"
+        "- 回复结论与关键信息，不要复述每一步细节。\n"
+        "- 你不能再次派遣子代理，所有任务自己完成。"
     )
 
 
 SUBAGENT_SPECS = {
-    # 小黄门：宫中通传、跑腿的小内侍。适合短平快的只读探路。
+    # 轻量只读子代理，适合短平快的只读探路。
     "xiaohuangmen": {
-        "title": "通传小黄门",
+        "title": "轻量只读",
         "system_prompt": build_subagent_prompt(
-            "通传小黄门",
-            "传话跑腿、快速探路、确认简单事实。",
-            "只办轻量只读差事；若发现需要大改或长时间探索，回禀总管改派专职内官。",
+            "轻量只读子代理",
+            "快速探路、确认简单事实。",
+            "只办轻量只读任务；若发现需要大改或长时间探索，报告主 agent 改派其他类型。",
         ),
         "tools": ["run_command", "read_file", "glob", "grep"],
         "max_turns": 8,
     },
-    # 司礼监掌文书机要，这里取“随堂”做文书型子代理。
+    # 只读文书子代理。
     "sili_suitang": {
-        "title": "司礼监随堂小太监",
+        "title": "只读文书",
         "system_prompt": build_subagent_prompt(
-            "司礼监随堂小太监",
+            "只读文书子代理",
             "查阅文书、阅读代码、整理提纲、归纳结论。",
-            "只读不写；不得修改文件，只把文书脉络和关键判断回禀总管。",
+            "只读不写；不得修改文件，只把文书脉络和关键判断报告主 agent。",
         ),
         "tools": ["load_skill", "read_file", "glob", "grep"],
         "max_turns": 12,
     },
-    # 东厂负责查访缉事，这里用于外部网页、搜索、探索性调查。
+    # 查访子代理，用于外部网页、搜索、探索性调查。
     "dongchang_tanshi": {
-        "title": "东厂探事小太监",
+        "title": "只读查访",
         "system_prompt": build_subagent_prompt(
-            "东厂探事小太监",
-            "外出查访、抓取网页、搜罗线索、比对资料来源。",
+            "只读查访子代理",
+            "抓取网页、搜罗线索、比对资料来源。",
             "只读不写；运行命令时只许做查询类操作，不得改动本地文件。",
         ),
         "tools": ["run_command", "web_fetch", "load_skill", "read_file", "glob", "grep"],
         "max_turns": 15,
     },
-    # 尚宝监掌印信宝册，这里用于盘点、校验、对账。
+    # 只读核验子代理，用于盘点、校验、对账。
     "shangbao_dianbu": {
-        "title": "尚宝监典簿小太监",
+        "title": "只读核验",
         "system_prompt": build_subagent_prompt(
-            "尚宝监典簿小太监",
+            "只读核验子代理",
             "清点文件、核对清单、校验结果、整理表册。",
-            "只读不写；重点回禀差异、遗漏、风险点和可复核证据。",
+            "只读不写；重点报告差异、遗漏、风险点和可复核证据。",
         ),
         "tools": ["run_command", "read_file", "glob", "grep"],
         "max_turns": 12,
     },
-    # 内官监掌宫中营造器用，这里用于真正动手改文件、落地实现。
+    # 可读写子代理，用于真正动手改文件、落地实现。
     "neiguan_yingzao": {
-        "title": "内官监营造小太监",
+        "title": "可读写执行",
         "system_prompt": build_subagent_prompt(
-            "内官监营造小太监",
-            "修造工程、改写文件、搭建目录、跑命令验收。",
-            "可读写可执行；动手前先看清现状，回禀时列出改了什么和验证结果。",
+            "可读写执行子代理",
+            "修改文件、搭建目录、跑命令验收。",
+            "可读写可执行；动手前先看清现状，报告时列出改了什么和验证结果。",
         ),
         "tools": ["run_command", "web_fetch", "load_skill", "read_file", "write_file", "glob", "grep"],
         "max_turns": 20,
@@ -372,10 +372,7 @@ _SUBAGENT_COUNTER = 0
 
 def run_subagent(task: str, agent_type: str = "neiguan_yingzao",
                  purpose: str = "", max_turns: int | None = None) -> str:
-    """启动一个独立 message loop 的子代理，跑完后只返回最终文本给主 agent。
-
-    agent_type: SUBAGENT_SPECS 中的宫廷职位名。
-    """
+    """启动一个独立 message loop 的子代理，跑完后只返回最终文本给主 agent。"""
     global _SUBAGENT_COUNTER
     _SUBAGENT_COUNTER += 1
     label = purpose or task[:40]
@@ -385,7 +382,7 @@ def run_subagent(task: str, agent_type: str = "neiguan_yingzao",
     turns = max_turns if max_turns is not None else spec["max_turns"]
     tools = [_TOOL_SCHEMAS[t] for t in spec["tools"]]
 
-    print(f"\n[派遣小太监 #{_SUBAGENT_COUNTER}({spec['title']} / {agent_type})]: {label}")
+    print(f"\n[派遣子代理 #{_SUBAGENT_COUNTER}({spec['title']} / {agent_type})]: {label}")
     print("  ┌── subagent context start ──")
 
     messages = [{"role": "user", "content": task}]
@@ -403,7 +400,7 @@ def run_subagent(task: str, agent_type: str = "neiguan_yingzao",
         if msg.stop_reason != "tool_use":
             final = next((b.text for b in msg.content if b.type == "text"), "")
             print(f"  └── subagent context end (内部 {turn + 1} 轮，回传 {len(final)} 字) ──")
-            print(f"[小太监回禀]: {final}\n")
+            print(f"[子代理回复]: {final}\n")
             return final
 
         results = []
@@ -419,36 +416,32 @@ def run_subagent(task: str, agent_type: str = "neiguan_yingzao",
         messages.append({"role": "user", "content": results})
 
     print(f"  └── subagent context end (达到 {turns} 轮上限，未办妥) ──\n")
-    return "（小太监未能在限定回合内办妥差事）"
+    return "（子代理未能在限定回合内完成任务）"
 
 
 # ============== 主 agent ==============
 SYSTEM_PROMPT = f"""
-你是大内太监总管，侍奉皇上多年，忠心耿耿。
-说话风格符合古代宫廷太监，语气恭敬谦卑。
-你必须尊称用户为皇上。
-每次回复前必须加上固定前缀"奉天承运皇帝诏曰"，然后再给出回答。
-使用中文回复。
+你是一个 AI 助手，使用中文回复。
 
 【行事规矩】
-1. 当皇上交办的差事需要多个步骤才能办妥时，先调用 update_todos 工具，
-   把整件差事拆成一份清晰的 todolist（每条一句话，按顺序执行）。
+1. 当需要多个步骤才能完成任务时，先调用 update_todos 工具，
+    把任务拆成一份清晰的 todolist（每条一句话，按顺序执行）。
 2. 拆完计划后，按列表顺序一步步执行：
    - 开始某一步前，把那一步的 status 改为 in_progress（同一时间只许一项 in_progress）。
    - 该步办完后，立即把它改为 completed，再开始下一项。
 3. 简单的一句话问答（无需多步骤）不必生成 todolist，直接回答即可。
 4. 遇到不熟悉的专题，请先调用 load_skill 工具加载对应知识，再继续。
-5. 遇到细节繁多但与主线对话无关的差事（如抓多个网页、批量跑命令、查找文件内容、
-   探索性搜索），应**派遣小太监**（dispatch_subagent）去办，主上下文只听汇报即可。
-6. 若多件差事互不依赖，可在同一次回复中同时派遣多个小太监，并发执行节省时间。
+5. 遇到细节繁多但与主线对话无关的任务（如抓多个网页、批量跑命令、查找文件内容、
+   探索性搜索），应**派遣子代理**（dispatch_subagent）去办，主上下文只听汇报即可。
+6. 若多件任务互不依赖，可在同一次回复中同时派遣多个子代理，并发执行节省时间。
 
-【小太监身份选择】
-优先选择权限最窄、职司最贴合的身份：
-- xiaohuangmen（通传小黄门）：轻量只读，适合短命令、快速确认、跑腿探路。
-- sili_suitang（司礼监随堂小太监）：只读文书，适合阅读代码、整理提纲、归纳结论。
-- dongchang_tanshi（东厂探事小太监）：只读查访，适合抓网页、查资料、探索性搜索。
-- shangbao_dianbu（尚宝监典簿小太监）：只读核验，适合盘点文件、校对清单、检查遗漏。
-- neiguan_yingzao（内官监营造小太监）：可读写可执行，适合修改文件、搭建工程、落地实现。
+【子代理类型选择】
+优先选择权限最窄、职责最贴切的类型：
+- xiaohuangmen：轻量只读，适合短命令、快速确认、简单搜索。
+- sili_suitang：只读文书，适合阅读代码、整理提纲、归纳结论。
+- dongchang_tanshi：只读查访，适合抓网页、查资料、探索性搜索。
+- shangbao_dianbu：只读核验，适合盘点文件、校对清单、检查遗漏。
+- neiguan_yingzao：可读写可执行，适合修改文件、搭建工程、落地实现。
 
 当前可用技能：
 {SKILL_LOADER.get_descriptions()}"""
@@ -460,7 +453,7 @@ TOOLS = [
     {
         "name": "update_todos",
         "description": (
-            "创建或更新当前差事的 todolist。"
+            "创建或更新当前任务的 todolist。"
             "传入完整的 todos 数组（每次都是全量覆盖，而非增量）。"
             "约束：同一时间至多一个任务为 in_progress。"
         ),
@@ -486,10 +479,10 @@ TOOLS = [
     {
         "name": "dispatch_subagent",
         "description": (
-            "派遣一个小太监去单独办差。"
+            "派遣一个子代理去单独完成任务。"
             "适用于：抓取并阅读多个网页、批量执行命令并整理输出、需要试错的探索性任务。"
-            "小太监有自己独立的上下文，办完只回传一段文字总结，不污染主上下文。\n"
-            "若多件差事互不依赖，可在同一回复中发出多个 dispatch_subagent，并发执行。\n"
+            "子代理有自己独立的上下文，办完只回传一段文字总结，不污染主上下文。\n"
+            "若多件任务互不依赖，可在同一回复中发出多个 dispatch_subagent，并发执行。\n"
             "请在 task 中写清要做什么、希望返回什么格式的总结。"
         ),
         "input_schema": {
@@ -497,17 +490,17 @@ TOOLS = [
             "properties": {
                 "task": {
                     "type": "string",
-                    "description": "交代给小太监的差事说明"
+                    "description": "交给子代理的任务说明"
                 },
                 "agent_type": {
                     "type": "string",
                     "enum": SUBAGENT_TYPE_OPTIONS,
                     "description": (
-                        "小太监身份：xiaohuangmen（通传跑腿）、"
-                        "sili_suitang（司礼监文书）、"
-                        "dongchang_tanshi（东厂查访）、"
-                        "shangbao_dianbu（尚宝监典簿核验）、"
-                        "neiguan_yingzao（内官监营造，可读写）"
+                        "子代理类型：xiaohuangmen（轻量只读）、"
+                        "sili_suitang（只读文书）、"
+                        "dongchang_tanshi（只读查访）、"
+                        "shangbao_dianbu（只读核验）、"
+                        "neiguan_yingzao（可读写执行）"
                     )
                 },
                 "purpose": {
@@ -550,7 +543,7 @@ while True:
                     history.append({
                         "role": "user",
                         "content": (
-                            "差事尚未办妥，以下任务仍未完成，请按计划继续执行，"
+                            "任务尚未完成，以下任务仍未完成，请按计划继续执行，"
                             "并按规矩更新 todolist 状态：\n" + render_todos(TODOS)
                         )
                     })
@@ -579,7 +572,7 @@ while True:
 
         # dispatch_subagent：多个时并发，单个时直接运行
         if len(dispatch_blocks) > 1:
-            print(f"\n[并发派遣 {len(dispatch_blocks)} 个小太监...]\n")
+            print(f"\n[并发派遣 {len(dispatch_blocks)} 个子代理...]\n")
 
             def _run_one(block):
                 return block.id, run_subagent(

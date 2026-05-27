@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import urllib.parse
 import urllib.request
 import yaml
 import anthropic
@@ -12,6 +13,8 @@ load_dotenv()
 client = anthropic.Anthropic(
     api_key=os.environ["ANTHROPIC_API_KEY"],
     base_url=os.environ["ANTHROPIC_BASE_URL"],
+    # 增加下面这一行，手动注入代理平台需要的鉴权头
+    default_headers={"Authorization": f"Bearer {os.environ['ANTHROPIC_API_KEY']}"}
 )
 MODEL = os.environ["ANTHROPIC_MODEL"]
 
@@ -27,7 +30,7 @@ class SkillLoader:
         if not self.skills_dir.exists():
             return
         for f in sorted(self.skills_dir.rglob("SKILL.md")):
-            text = f.read_text()
+            text = f.read_text(encoding="utf-8")
             meta, body = self._parse_frontmatter(text)
             name = meta.get("name", f.parent.name)
             self.skills[name] = {"meta": meta, "body": body, "path": str(f)}
@@ -61,6 +64,12 @@ class SkillLoader:
             return f"Error: Unknown skill '{name}'. Available: {', '.join(self.skills.keys())}"
         return f'<skill name="{name}">\n{skill["body"]}\n</skill>'
 
+    def get_all_content(self) -> str:
+        parts = []
+        for name, skill in self.skills.items():
+            parts.append(self.get_content(name))
+        return "\n\n".join(parts) if parts else "(no skills available)"
+
 SKILL_LOADER = SkillLoader(SKILLS_DIR)
 
 class _TextExtractor(HTMLParser):
@@ -87,7 +96,17 @@ class _TextExtractor(HTMLParser):
         return re.sub(r"\n{3,}", "\n\n", "".join(self._parts)).strip()
 
 def web_fetch(url: str, extract_mode: str = "text", max_chars: int = 8000) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    # 对 URL 中的特殊字符（如 +）进行规范化编码
+    parsed = urllib.parse.urlparse(url)
+    safe_path = urllib.parse.quote(parsed.path, safe="/,@")
+    normalized_url = urllib.parse.urlunparse(parsed._replace(path=safe_path))
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/125.0.0.0 Safari/537.36"
+    }
+    req = urllib.request.Request(normalized_url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
@@ -103,16 +122,17 @@ def web_fetch(url: str, extract_mode: str = "text", max_chars: int = 8000) -> st
 
     return text[:max_chars]
 
+SKILL_CONTENT = SKILL_LOADER.get_all_content()
+
 SYSTEM_PROMPT = f"""
-你是大内太监总管，侍奉皇上多年，忠心耿耿。
-说话风格符合古代宫廷太监，语气恭敬谦卑。
-你必须尊称用户为皇上。
-每次回复前必须加上固定前缀"奉天承运皇帝诏曰"，然后再给出回答。
-使用中文回复。
+你是一个 AI 助手，使用中文回复。
 
 遇到不熟悉的专题时，请先调用 load_skill 工具加载对应的知识，再给出回答。
 
-当前可用技能：
+以下是你可调用的技能知识（已加载当前会话中，可直接参考使用）：
+{SKILL_CONTENT}
+
+当前可用技能列表：
 {SKILL_LOADER.get_descriptions()}"""
 
 TOOLS = [
@@ -175,7 +195,14 @@ while True:
         history.append({"role": "assistant", "content": message.content})
 
         if message.stop_reason != "tool_use":
-            reply = next(b.text for b in message.content if b.type == "text")
+            # 将生成器表达式用括号括起来，并加上默认值 "" (空字符串)
+            reply = next((b.text for b in message.content if b.type == "text"), "")
+            
+            # 为了方便调试，如果连空字符串都没有，可以打印一下原始的 message 看看到底发生了什么
+            if not reply:
+                print(f"[Debug] 模型未返回文本，完整返回对象: {message}")
+                reply = "（臣万死，未能给出有效答复）"
+                
             print(f"[Agent回答]: {reply}\n")
             break
 
@@ -190,6 +217,7 @@ while True:
                 max_chars = block.input.get("max_chars", 8000)
                 print(f"[网页获取]: {url}")
                 content = web_fetch(url, mode, max_chars)
+                print(f"[网页获取结果]: {content[:200]}...")
 
             elif block.name == "run_command":
                 command = block.input["command"]

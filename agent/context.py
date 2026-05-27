@@ -39,7 +39,7 @@ class ContextBuilder:
         parts = []
 
         bootstrap = "\n\n".join(
-            (self.docs_dir / name).read_text().strip()
+            (self.docs_dir / name).read_text(encoding="utf-8").strip()
             for name in self._BOOTSTRAP_FILES
             if (self.docs_dir / name).exists()
         )

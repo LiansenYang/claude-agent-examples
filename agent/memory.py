@@ -21,9 +21,9 @@ class MemoryStore:
     def _ensure(self) -> None:
         self.memory_dir.mkdir(parents=True, exist_ok=True)
         if not self.memory_file.exists():
-            self.memory_file.write_text("# 长期记忆\n\n此文件常驻上下文，记录核心目标、当前任务与关键事实。\n")
+            self.memory_file.write_text("# 长期记忆\n\n此文件常驻上下文，记录核心目标、当前任务与关键事实。\n", encoding="utf-8")
         if not self.history_file.exists():
-            self.history_file.write_text("")
+            self.history_file.write_text("", encoding="utf-8")
 
     # ── 原始层 ──────────────────────────────────────────────
     def append_history(self, role: str, content: Any) -> None:
@@ -52,7 +52,12 @@ class MemoryStore:
 
     # ── 长期层 ──────────────────────────────────────────────
     def read_memory(self) -> str:
-        return self.memory_file.read_text(encoding="utf-8") if self.memory_file.exists() else ""
+        if self.memory_file.exists():
+            try:
+                return self.memory_file.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                return self.memory_file.read_text(encoding="gbk")
+        return ""
 
     def write_memory(self, content: str) -> None:
         self.memory_file.write_text(content.strip() + "\n", encoding="utf-8")
