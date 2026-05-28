@@ -1,4 +1,5 @@
 import os
+import platform
 import re
 import subprocess
 import urllib.request
@@ -13,11 +14,12 @@ client = anthropic.Anthropic(
     api_key=os.environ["ANTHROPIC_API_KEY"],
     base_url=os.environ["ANTHROPIC_BASE_URL"],
     # 增加下面这一行，手动注入代理平台需要的鉴权头
-    default_headers={"Authorization": f"Bearer {os.environ['ANTHROPIC_API_KEY']}"}
+    default_headers={"Authorization": f"Bearer {os.environ['ANTHROPIC_API_KEY']}"},
+    timeout=3000.0 # 增加超时时间到5分钟，防止大上下文时挂起
 )
 MODEL = os.environ["ANTHROPIC_MODEL"]
 
-SKILLS_DIR = Path(__file__).parent / "skills"
+SKILLS_DIR = Path(__file__).parent.parent.parent / "skills"
 
 class SkillLoader:
     def __init__(self, skills_dir: Path):
@@ -148,9 +150,16 @@ def update_todos(todos: list[dict]) -> str:
     summary = f"todos updated: total={len(TODOS)}, completed={len(done)}, in_progress={len(in_progress)}, pending={len(pending)}"
     return summary + "\n\n当前列表：\n" + render_todos(TODOS)
 
+if platform.system() == "Windows":
+    env_prompt = "当前操作系统为 Windows，run_command 执行环境为 cmd.exe。\n请注意：严禁使用 Linux 特有的 shell 语法（如 cat << EOF、grep、ls 等）。如果需要多行写入文件，请优先使用 write_file 工具，避免因命令行转义导致语法错误。"
+else:
+    env_prompt = f"当前操作系统为 {platform.system()}，run_command 执行环境通常为 bash/sh。\n你可以使用标准的 Unix/Linux shell 语法，但写入多行文件时也建议优先使用 write_file 工具。"
 
 SYSTEM_PROMPT = f"""
 你是一个 AI 助手，使用中文回复。
+
+【运行环境】
+{env_prompt}
 
 【行事规矩】
 1. 当需要多个步骤才能完成任务时，先调用 update_todos 工具，
@@ -165,6 +174,18 @@ SYSTEM_PROMPT = f"""
 {SKILL_LOADER.get_descriptions()}"""
 
 TOOLS = [
+    {
+        "name": "write_file",
+        "description": "安全地将多行文本写入指定文件，避免了在 shell 命令行中转义多行文本引发的各种语法错误。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filepath": {"type": "string", "description": "要写入的绝对或相对文件路径"},
+                "content": {"type": "string", "description": "要写入的完整文件内容"}
+            },
+            "required": ["filepath", "content"]
+        }
+    },
     {
         "name": "run_command",
         "description": "在终端执行一条 shell 命令并返回输出",
@@ -247,7 +268,7 @@ while True:
     while True:
         message = client.messages.create(
             model=MODEL,
-            max_tokens=20000,
+            max_tokens=200000,
             system=SYSTEM_PROMPT,
             tools=TOOLS,
             messages=history
@@ -278,6 +299,7 @@ while True:
                 TODOS = []
             break
 
+
         tool_results = []
         for block in message.content:
             if block.type != "tool_use":
@@ -290,11 +312,32 @@ while True:
                 print(f"[网页获取]: {url}")
                 content = web_fetch(url, mode, max_chars)
 
+            elif block.name == "write_file":
+                filepath = block.input["filepath"]
+                file_content = block.input["content"]
+                print(f"[写入文件]: {filepath}")
+                try:
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        f.write(file_content)
+                    content = f"文件 {filepath} 写入成功！"
+                except Exception as e:
+                    content = f"写入文件失败: {e}"
+
             elif block.name == "run_command":
                 command = block.input["command"]
                 print(f"[执行命令]: {command}")
-                result = subprocess.run(command, shell=True, capture_output=True, text=True)
-                output = result.stdout or result.stderr
+                result = subprocess.run(command, shell=True, capture_output=True)
+                try:
+                    stdout = result.stdout.decode('utf-8')
+                except UnicodeDecodeError:
+                    stdout = result.stdout.decode('gbk', errors='replace')
+                try:
+                    stderr = result.stderr.decode('utf-8')
+                except UnicodeDecodeError:
+                    stderr = result.stderr.decode('gbk', errors='replace')
+                output = stdout or stderr
+                if len(output) > 8000:
+                    output = output[:8000] + f"\n... [输出过长，已自动截断。原始长度: {len(output)}]"
                 print(f"[命令输出]: {output}")
                 content = output
 

@@ -21,7 +21,7 @@ client = anthropic.Anthropic(
     default_headers={"Authorization": f"Bearer {os.environ['ANTHROPIC_API_KEY']}"}
 )
 
-SKILLS_DIR = Path(__file__).parent / "skills"
+SKILLS_DIR = Path(__file__).parent.parent.parent / "skills"
 MODEL = os.environ["ANTHROPIC_MODEL"]
 TEAM_DIR = Path(__file__).parent / ".team"
 INBOX_DIR = TEAM_DIR / "inbox"

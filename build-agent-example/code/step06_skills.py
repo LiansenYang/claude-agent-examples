@@ -18,7 +18,8 @@ client = anthropic.Anthropic(
 )
 MODEL = os.environ["ANTHROPIC_MODEL"]
 
-SKILLS_DIR = Path(__file__).parent / "skills"
+SKILLS_DIR = Path(__file__).parent.parent.parent / "skills"
+
 
 class SkillLoader:
     def __init__(self, skills_dir: Path):
@@ -70,7 +71,9 @@ class SkillLoader:
             parts.append(self.get_content(name))
         return "\n\n".join(parts) if parts else "(no skills available)"
 
+
 SKILL_LOADER = SkillLoader(SKILLS_DIR)
+
 
 class _TextExtractor(HTMLParser):
     def __init__(self):
@@ -94,6 +97,7 @@ class _TextExtractor(HTMLParser):
 
     def get_text(self):
         return re.sub(r"\n{3,}", "\n\n", "".join(self._parts)).strip()
+
 
 def web_fetch(url: str, extract_mode: str = "text", max_chars: int = 8000) -> str:
     # 对 URL 中的特殊字符（如 +）进行规范化编码
@@ -122,15 +126,13 @@ def web_fetch(url: str, extract_mode: str = "text", max_chars: int = 8000) -> st
 
     return text[:max_chars]
 
+
 SKILL_CONTENT = SKILL_LOADER.get_all_content()
 
 SYSTEM_PROMPT = f"""
 你是一个 AI 助手，使用中文回复。
 
 遇到不熟悉的专题时，请先调用 load_skill 工具加载对应的知识，再给出回答。
-
-以下是你可调用的技能知识（已加载当前会话中，可直接参考使用）：
-{SKILL_CONTENT}
 
 当前可用技能列表：
 {SKILL_LOADER.get_descriptions()}"""
@@ -153,9 +155,9 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "url":          {"type": "string",  "description": "要访问的完整 URL"},
-                "extract_mode": {"type": "string",  "description": "提取模式：text（纯文本，默认）或 raw（原始 HTML）"},
-                "max_chars":    {"type": "integer", "description": "最大返回字符数，默认 8000"}
+                "url": {"type": "string", "description": "要访问的完整 URL"},
+                "extract_mode": {"type": "string", "description": "提取模式：text（纯文本，默认）或 raw（原始 HTML）"},
+                "max_chars": {"type": "integer", "description": "最大返回字符数，默认 8000"}
             },
             "required": ["url"]
         }
@@ -179,31 +181,55 @@ TOOLS = [
 history = []
 
 while True:
-    user_input = input("你: ")
+    try:
+        user_input = input("你: ")
+    except EOFError:
+        print("\n[环境提示] 检测到输入流关闭 (EOFError)，程序自动退出。")
+        print(
+            "如果您是在 PyCharm 的 Python Console 或是 IDLE 中运行，这属于 IDE 控制台对连续 input() 支持不良的已知 Bug。")
+        print("👉 请改在真实的系统终端（Terminal / CMD / PowerShell）中执行：python code/step06_skills.py")
+        break
 
     history.append({"role": "user", "content": user_input})
 
     while True:
-        message = client.messages.create(
-            model=MODEL,
-            max_tokens=1000,
-            system=SYSTEM_PROMPT,
-            tools=TOOLS,
-            messages=history
-        )
+        try:
+            print("[Agent请求API中...]", end="", flush=True)
+            with client.messages.stream(
+                    model=MODEL,
+                    max_tokens=1000,
+                    system=SYSTEM_PROMPT,
+                    tools=TOOLS,
+                    messages=history
+            ) as stream:
+                first_text = True
+                for text in stream.text_stream:
+                    if first_text:
+                        print("\n[Agent实时回答]: ", end="", flush=True)
+                        first_text = False
+                    print(text, end="", flush=True)
+            if not first_text:
+                print("\n")
+            else:
+                print(" 完成")  # 如果没文本输出（即直接调用工具）
+            message = stream.get_final_message()
+        except Exception as e:
+            print(f"\n[API 请求报错] {e}")
+            print("由于报错，当前对话可能无法继续，请检查 API 配置或上下文长度。")
+            history.pop()  # 移除导致报错的最后一条输入，以便重试
+            break
 
         history.append({"role": "assistant", "content": message.content})
 
         if message.stop_reason != "tool_use":
             # 将生成器表达式用括号括起来，并加上默认值 "" (空字符串)
-            reply = next((b.text for b in message.content if b.type == "text"), "")
-            
+            reply = next((b.text for b in message.content if getattr(b, "type", "") == "text"), "")
+
             # 为了方便调试，如果连空字符串都没有，可以打印一下原始的 message 看看到底发生了什么
             if not reply:
                 print(f"[Debug] 模型未返回文本，完整返回对象: {message}")
-                reply = "（臣万死，未能给出有效答复）"
-                
-            print(f"[Agent回答]: {reply}\n")
+                print("[Agent回答]: （臣万死，未能给出有效答复）\n")
+
             break
 
         tool_results = []
