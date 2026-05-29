@@ -65,15 +65,7 @@ class SkillLoader:
             return f"Error: Unknown skill '{name}'. Available: {', '.join(self.skills.keys())}"
         return f'<skill name="{name}">\n{skill["body"]}\n</skill>'
 
-    def get_all_content(self) -> str:
-        parts = []
-        for name, skill in self.skills.items():
-            parts.append(self.get_content(name))
-        return "\n\n".join(parts) if parts else "(no skills available)"
-
-
 SKILL_LOADER = SkillLoader(SKILLS_DIR)
-
 
 class _TextExtractor(HTMLParser):
     def __init__(self):
@@ -125,9 +117,6 @@ def web_fetch(url: str, extract_mode: str = "text", max_chars: int = 8000) -> st
         text = raw
 
     return text[:max_chars]
-
-
-SKILL_CONTENT = SKILL_LOADER.get_all_content()
 
 SYSTEM_PROMPT = f"""
 你是一个 AI 助手，使用中文回复。
